@@ -6,7 +6,7 @@
   <bus burstLength="4" writeCombine="false" mmu="false" />
 
   <ICache type="method" size="4k" assoc="16" repl="fifo" />
-  <DCache size="2k" assoc="1" repl="" writeThrough="true" />
+  <DCache size="2k" assoc="1" repl="" writeThrough="true" intCache="true"/>
   <SCache size="2k" />
   <ISPM size="1k" />
   <DSPM size="2k" />
@@ -14,13 +14,14 @@
   <ExtMem size="2M" />
 
   <IOs>
- 	<IO DevTypeRef="CpuInfo" offset="0"/>
-	<IO DevTypeRef="Timer" offset="2" intrs="0,1"/>
+ 	  <IO DevTypeRef="CpuInfo" offset="0"/>
+	  <IO DevTypeRef="Timer" offset="2" intrs="0,1"/>
+    <IO DevTypeRef="IntCacheCtrl" offset="7"/>
   </IOs>
 
   <Devs>
   	<Dev DevType="CpuInfo" entity="CpuInfo" iface="OcpCore" />
-  	<Dev DevType="Timer" entity="Timer" iface="OcpCore" />
+  	<Dev DevType="Timer" entity="Timer" iface="OcpCore" />    
+    <Dev DevType="IntCacheCtrl" entity="IntCacheCtrl" iface="OcpCore" />
   </Devs>
 </patmos>
-

@@ -56,14 +56,15 @@ class Memory() extends Module {
   // React on error responses
   val illMem = (io.localInOut.S.Resp === OcpResp.ERR ||
                 io.globalInOut.S.Resp === OcpResp.ERR ||
-                io.icacheIllMem || io.scacheIllMem)
+                io.icacheIllMem || io.scacheIllMem) 
   val illMemReg = Reg(next = illMem)
+  val intCacheReg = Reg(next = io.intCacheInt)
 
   // Flush logic
   val flush = (memReg.mem.xcall || memReg.mem.trap ||
                ((memReg.mem.call || memReg.mem.ret ||
                  memReg.mem.brcf || memReg.mem.xret) && memReg.mem.nonDelayed) ||
-               memReg.mem.illOp || illMemReg)
+               memReg.mem.illOp || illMemReg || intCacheReg) 
   io.flush := flush
 
   // Stall logic
@@ -82,7 +83,7 @@ class Memory() extends Module {
       mayStallReg := Bool(false)
     }
   }
-  when(illMem) {
+  when(illMem || io.intCacheInt) {
       mayStallReg := Bool(false)
   }
 
@@ -168,7 +169,7 @@ class Memory() extends Module {
   io.globalInOut.M.Addr := Cat(io.exmem.mem.addr(ADDR_WIDTH-1, 2), Bits("b00"))
   io.globalInOut.M.Data := Cat(wrData(3), wrData(2), wrData(1), wrData(0))
   io.globalInOut.M.ByteEn := byteEn
-  io.globalInOut.M.AddrSpace := Mux(io.exmem.mem.typ === MTYPE_S, OcpCache.STACK_CACHE,
+  io.globalInOut.M.AddrSpace := Mux(io.exmem.mem.typ === MTYPE_S, OcpCache.STACK_CACHE,  
                                     Mux(io.exmem.mem.typ === MTYPE_C, OcpCache.DATA_CACHE,
                                         OcpCache.UNCACHED))
 
@@ -217,6 +218,12 @@ class Memory() extends Module {
   io.memwb.rd := memReg.rd
   // Fill in data from loads
   io.memwb.rd(0).data := Mux(memReg.mem.load, dout, memReg.rd(0).data)
+  
+  when(io.intCacheInt || intCacheReg ){ 
+    io.memwb.rd(0).valid := Bool(false)
+    io.memwb.rd(1).valid := Bool(false)
+  }
+
 
   // call to fetch
   io.memfe.doCallRet := (memReg.mem.call || memReg.mem.ret || memReg.mem.brcf ||
@@ -235,14 +242,16 @@ class Memory() extends Module {
   // acknowledge exception
   io.exc.call := memReg.mem.xcall
   io.exc.ret := memReg.mem.xret
-  // trigger exception
-  io.exc.exc := memReg.mem.trap || memReg.mem.illOp || illMemReg
 
-  io.exc.src := Mux(memReg.mem.illOp, Bits(0),
+  // trigger exception
+  io.exc.exc := memReg.mem.trap || memReg.mem.illOp || illMemReg || intCacheReg
+
+  io.exc.src := Mux(memReg.mem.illOp, Bits(0), 
                     Mux(illMemReg, Bits(1),
-                        memReg.mem.xsrc))
+                        Mux(intCacheReg, Bits("b10"),
+                            memReg.mem.xsrc)))
   io.exc.excBase := memReg.base
-  io.exc.excAddr := Mux(memReg.mem.trap, memReg.relPc + UInt(1), memReg.relPc)
+  io.exc.excAddr := Mux(memReg.mem.trap, memReg.relPc + UInt(1),memReg.relPc)
 
   // Keep signal alive for debugging
   debug(io.memwb.pc)

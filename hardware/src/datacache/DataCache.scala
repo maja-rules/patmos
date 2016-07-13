@@ -57,6 +57,8 @@ class DataCache extends Module {
     val dcPerf = new DataCachePerf()
     val scPerf = new StackCachePerf()
     val wcPerf = new WriteCombinePerf()
+    val intCacheInt = Bool(OUTPUT)
+    val intCacheMode = Bool(INPUT)
   }
 
   // Register selects
@@ -73,6 +75,8 @@ class DataCache extends Module {
   val dm = 
     if (DCACHE_SIZE <= 0)
       Module(new NullCache())
+    else if (DCACHE_INTCACHE)
+      Module(new InterruptCache(DCACHE_SIZE, BURST_LENGTH*BYTES_PER_WORD))
     else if (DCACHE_ASSOC == 1 && DCACHE_WRITETHROUGH)
       Module(new DirectMappedCache(DCACHE_SIZE, BURST_LENGTH*BYTES_PER_WORD))
     else if (DCACHE_ASSOC == 1 && !DCACHE_WRITETHROUGH)
@@ -88,12 +92,26 @@ class DataCache extends Module {
     }
 
   dm.io.master.M := io.master.M
-  dm.io.master.M.Cmd := Mux(selDC ||
+  
+  when(Bool(DCACHE_INTCACHE)){
+    dm.io.master.M.Cmd := Mux((selDC && io.intCacheMode)  ||
+                            (Bool(DCACHE_WRITETHROUGH) && Bool(DCACHE_SIZE > 0) &&
+                             io.master.M.Cmd === OcpCmd.WR && io.intCacheMode),
+                            io.master.M.Cmd, OcpCmd.IDLE)
+  }.otherwise{
+    dm.io.master.M.Cmd := Mux(selDC ||
                             (Bool(DCACHE_WRITETHROUGH) && Bool(DCACHE_SIZE > 0) &&
                              io.master.M.Cmd === OcpCmd.WR),
                             io.master.M.Cmd, OcpCmd.IDLE)
+  }
+
   dm.io.invalidate := io.invalDCache
   val dmS = dm.io.master.S
+
+  io.intCacheInt:=Bool(false)
+  when(io.intCacheMode && Bool(DCACHE_INTCACHE)){
+    io.intCacheInt:=dm.io.intCacheInt
+  }
 
   // Instantiate stack cache
   val sc = Module(if (SCACHE_SIZE <= 0) new NullStackCache() else new StackCache())
@@ -107,7 +125,12 @@ class DataCache extends Module {
   // Instantiate bridge for bypasses and writes
   val bp = Module(new NullCache())
   bp.io.master.M := io.master.M
-  bp.io.master.M.Cmd := Mux(!selDC && !selSC, io.master.M.Cmd, OcpCmd.IDLE)
+  when(Bool(DCACHE_INTCACHE)){
+    bp.io.master.M.Cmd := Mux((!selDC && !selSC)||(!io.intCacheMode && selDC), io.master.M.Cmd, OcpCmd.IDLE)
+  }.otherwise{
+    bp.io.master.M.Cmd := Mux(!selDC && !selSC, io.master.M.Cmd, OcpCmd.IDLE)
+  }
+  
   val bpS = bp.io.master.S
 
   // Join read requests
@@ -117,18 +140,22 @@ class DataCache extends Module {
   val burstReadBus2 = Module(new OcpBurstBus(ADDR_WIDTH, DATA_WIDTH, BURST_LENGTH))
   val burstReadJoin2 = new OcpBurstJoin(sc.io.toMemory, burstReadBus1.io.master, burstReadBus2.io.slave)
 
-  // Combine writes
+  val noWrite = Bool()
+  noWrite:=Bool(false)
+  when(Bool(DCACHE_INTCACHE)){ //addresses reserved for interruptcache
+    noWrite:= Bits("h90000000")<=io.master.M.Addr && io.master.M.Addr <= Bits("h90000A10")
+  }
   val wc = Module(if (WRITE_COMBINE) new WriteCombineBuffer() else new WriteNoBuffer())
   wc.io.readMaster <> burstReadBus2.io.master
   wc.io.writeMaster.M := io.master.M
-  wc.io.writeMaster.M.Cmd := Mux(!selSC && (Bool(DCACHE_WRITETHROUGH) || !selDC),
+  wc.io.writeMaster.M.Cmd := Mux(!selSC && ((Bool(DCACHE_WRITETHROUGH) && !noWrite) || !selDC),
                                  io.master.M.Cmd, OcpCmd.IDLE)
   val wcWriteS = wc.io.writeMaster.S
   io.slave <> wc.io.slave
 
   // Pass data to pipeline
   io.master.S.Data := bpS.Data
-  when(selDCReg) { io.master.S.Data := dmS.Data }
+  when(selDCReg && io.intCacheMode && Bool(DCACHE_INTCACHE) || selDCReg && !Bool(DCACHE_INTCACHE)) { io.master.S.Data := dmS.Data }
   when(selSCReg) { io.master.S.Data := scS.Data }
 
   // Merge responses

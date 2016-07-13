@@ -55,8 +55,9 @@ class DirectMappedCacheWriteBack(size: Int, lineSize: Int) extends Module {
     val slave = new OcpBurstMasterPort(ADDR_WIDTH, DATA_WIDTH, lineSize/4)
     val invalidate = Bool(INPUT)
     val perf = new DataCachePerf()
+    val intCacheInt = Bool(OUTPUT) //not used
   }
-
+  io.intCacheInt := Bool(false)
 
   val addrBits = log2Up(size / BYTES_PER_WORD)
   val lineBits = log2Up(lineSize)

@@ -81,6 +81,7 @@ object Constants {
 
   val DCACHE_WRITETHROUGH = util.Config.getConfig.DCache.writeThrough
   val SCACHE_SIZE = util.Config.getConfig.SCache.size
+  val DCACHE_INTCACHE = util.Config.getConfig.DCache.intCache //added for interruptcache
 
   // we use a very simple decoding of ISPM at address 0x00010000
   val ISPM_ONE_BIT = 16

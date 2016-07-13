@@ -144,6 +144,7 @@ class InOut() extends Module {
     dev.io.ocp.M := io.memInOut.M
     dev.io.ocp.M.Cmd := Mux(selDeviceVec(devConf.offset), io.memInOut.M.Cmd, OcpCmd.IDLE)
     dev.io.superMode <> io.superMode
+    dev.io.intCacheMode <> io.intCacheMode //added for interruptcache
     dev.io.internalPort <> io.internalIO
     deviceSVec(devConf.offset) := dev.io.ocp.S
     Config.connectIOPins(devConf.name, io, dev.io)

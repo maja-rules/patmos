@@ -56,10 +56,12 @@ class TwoWaySetAssociativeCache(size: Int, lineSize: Int) extends Module {
     val slave = new OcpBurstMasterPort(ADDR_WIDTH, DATA_WIDTH, lineSize / 4)
     val invalidate = Bool(INPUT)
     val perf = new DataCachePerf()
+    val intCacheInt = Bool(OUTPUT) //not used
   }
 
   io.perf.hit := Bool(false)
   io.perf.miss := Bool(false)
+  io.intCacheInt := Bool(false)
 
   val addrBits = log2Up((size / 2) / BYTES_PER_WORD)
   val lineBits = log2Up(lineSize)

@@ -29,11 +29,12 @@
    those of the authors and should not be interpreted as representing official
    policies, either expressed or implied, of the copyright holder.
  */
-
 /*
- * Common definitions for I/O devices
+ * value of mode is 0 per default
+ * can be set to 1 or 0 by writing
  *
  * Authors: Wolfgang Puffitsch (wpuffitsch@gmail.com)
+ *          Maja Lund
  *
  */
 
@@ -44,64 +45,48 @@ import Node._
 
 import ocp._
 
-import patmos.Constants._
+object IntCacheCtrl extends DeviceObject {
+  var bitCount=1
 
-abstract class DeviceObject() {
-  // every device object must have methods "create" and "init", and a trait "Pins"
-  def init(params: Map[String, String])
-  def create(params: Map[String, String]) : Device
-  trait Pins
-  trait Intrs
+  def init(params: Map[String, String]) = { }
 
-  // helper functions for parameter parsing
-
-  def getParam(params: Map[String, String], key: String) : String = {
-    val param = params.get(key)
-    if (param == None) {
-      throw new IllegalArgumentException("Parameter " + key + " not found")
-    }
-    param.get
+  def create(params: Map[String, String]) : IntCacheCtrl = {
+    Module(new IntCacheCtrl())
   }
 
-  def getIntParam(params: Map[String, String], key: String) : Int = {
-    val param = getParam(params, key)
-    try { param.toInt
-    } catch { case exc : Exception =>
-      throw new IllegalArgumentException("Parameter " + key + " must be an integer")
+  trait Pins {
+    val intCacheCtrlPins = new Bundle() {
+      val mode = Bits(OUTPUT, bitCount)
     }
   }
+}
 
-  def getPosIntParam(params: Map[String, String], key: String) : Int = {
-    val param = getIntParam(params, key)
-    if (param <= 0) {
-      throw new IllegalArgumentException("Parameter " + key + " must be a positive integer")
-    }
-    param
+class IntCacheCtrl() extends CoreDevice() {
+
+  override val io = new CoreDeviceIO() with IntCacheCtrl.Pins
+
+  val modeReg = Reg(init = Bits(0, 1))
+
+  // Default response
+  val respReg = Reg(init = OcpResp.NULL)
+  respReg := OcpResp.NULL
+
+  // Write to IntCacheCtrl
+  when(io.ocp.M.Cmd === OcpCmd.WR) {
+    respReg := OcpResp.DVA
+    modeReg := io.ocp.M.Data(0, 0)
   }
-}
 
-abstract class Device() extends Module() {
-  val io = new InternalIO()
-}
+  // Read current state of IntCacheCtrl
+  when(io.ocp.M.Cmd === OcpCmd.RD) {
+    respReg := OcpResp.DVA
+  }
 
-class InternalIO() extends Bundle() {
-  val superMode = Bool(INPUT);
-  val internalPort = new Bundle()
-  val intCacheMode = Bool(OUTPUT) //added for interruptcache
-}
+  // Connections to master
+  io.ocp.S.Resp := respReg
+  io.ocp.S.Data := modeReg
 
-class CoreDevice() extends Device() {
-  override val io = new CoreDeviceIO()
-}
-
-class CoreDeviceIO() extends InternalIO() {
-  val ocp = new OcpCoreSlavePort(ADDR_WIDTH, DATA_WIDTH)
-}
-
-class BurstDevice(addrBits: Int) extends Device() {
-  override val io = new BurstDeviceIO(addrBits)
-}
-
-class BurstDeviceIO(addrBits: Int) extends InternalIO() {
-  val ocp = new OcpBurstSlavePort(addrBits, DATA_WIDTH, BURST_LENGTH)
+  // Connection to pins
+  io.intCacheCtrlPins.mode := Reg(next = modeReg)
+  io.intCacheMode := modeReg(0) === Bits(1)
 }

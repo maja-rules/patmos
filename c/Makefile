@@ -31,10 +31,11 @@ LDFLAGS-BOOTABLE?= \
 # Assuming 2 MB of main memory
 CFLAGS?=-target patmos-unknown-unknown-elf -O2 \
 	-I$(CURDIR) -I $(CURDIR)/libelf/ \
-	-mpatmos-disable-vliw
+	-mpatmos-disable-vliw \
+  -Xllc -mpatmos-cfl=non-delayed #added to avoid intcache control hazard
 LDFLAGS?= \
 	-mpatmos-method-cache-size=0x1000 \
-	-mpatmos-stack-base=0x1E2B40 -mpatmos-shadow-stack-base=0x1DAB40 \
+	-mpatmos-stack-base=0x200000 -mpatmos-shadow-stack-base=0x1f8000 \
 	-Xgold --defsym -Xgold __heap_end=0x1f0000 \
 	-Xgold -T -Xgold $(BUILDDIR)/../hardware/spm_ram.t
 
